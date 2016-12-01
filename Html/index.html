@@ -1,0 +1,18 @@
+<html>
+<body>
+
+<script type ="text/javascript">
+
+var ws = new WebSocket("ws://localhost:8000/ws/");
+
+ws.onmessage = function (args)
+{
+  var time = args.data;
+  //document.write("  time changed   ");
+  document.write(time + " ");
+};
+
+</script>
+
+</body>
+</html>
