@@ -13,11 +13,17 @@ namespace TopServer
     {
         static void Main(string[] args)
         {
-            Run();
+            Console.WriteLine("The server is running.");
 
-            //task1.Wait();
+            try
+            {
+                Run();
+            }
+            catch (Exception e)
+            {
+                Console.Write($"An error has occurred while listening for the client connections: {e.Message}");
+            }
 
-            Console.WriteLine("Press return to exit the server.");
             Console.ReadLine();
         }
         public static void Run()
@@ -26,33 +32,57 @@ namespace TopServer
             s.Prefixes.Add("http://localhost:8000/ws/");
             s.Start();
 
-            var listen_task = s.GetContextAsync();
-
-            listen_task.ContinueWith(async (hc_task) => 
+            while (true)
             {
-                var hc = hc_task.Result;
+                var listen_task = s.GetContextAsync();
 
-                if (!hc.Request.IsWebSocketRequest)
+                listen_task.ContinueWith(async (hc_task) =>
                 {
-                    hc.Response.StatusCode = 400;
-                    hc.Response.Close();
-                    return;
-                }
+                    var hc = hc_task.Result;
 
-                var wsc = await hc.AcceptWebSocketAsync(null);
+                    if (hc.Request.IsWebSocketRequest)
+                    {
+                        var wsc = await hc.AcceptWebSocketAsync(null);
 
-                var ws = wsc.WebSocket;
+                        Console.WriteLine("A client has connected.");
 
-                for (int i = 0; i != 10; ++i)
-                {
-                    await Task.Delay(1000);
-                    var time = DateTime.Now.ToLongTimeString();
-                    var buffer = Encoding.UTF8.GetBytes(time);
-                    var segment = new ArraySegment<byte>(buffer);
-                    await ws.SendAsync(segment, System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
-                }
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
-            });
+                        var ws = wsc.WebSocket;
+
+                        try
+                        {
+                            while (ws.State != WebSocketState.CloseReceived && ws.State != WebSocketState.Closed && ws.State != WebSocketState.Aborted)
+                            {
+                                await Task.Delay(1000);
+                                var time = DateTime.Now.ToLongTimeString();
+                                var buffer = Encoding.UTF8.GetBytes(time);
+                                var segment = new ArraySegment<byte>(buffer);
+                                await ws.SendAsync(segment, System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
+                            }
+
+                            Console.Write("The connection has been closed by the client.");
+                        }
+                        catch (Exception e)
+                        {
+                            Console.Write($"An error has occurred while sending the notifications to the client: {e.Message}");
+
+                            try
+                            {
+                                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
+                            }
+                            catch (Exception)
+                            {
+                            }
+                        }
+                    }
+                    else
+                    {
+                        hc.Response.StatusCode = 400;
+                        hc.Response.Close();
+                    }
+                });
+
+                listen_task.Wait();
+            }
         }
     }
 }
